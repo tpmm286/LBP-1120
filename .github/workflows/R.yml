@@ -1,0 +1,53 @@
+name: Release Windows Portable Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (Electron 22 compatible)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run automated unit tests
+        run: npm test
+
+      - name: Build web application bundle
+        run: npm run build
+
+      - name: Package Electron portable application
+        run: npx @electron/packager . LBP1120-Windows-x64 --platform=win32 --arch=x64 --overwrite --out=dist-win
+
+      - name: Create Portable Zip Package
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist-win\LBP1120-Windows-x64-win32-x64\* -DestinationPath dist-win\LBP1120-Windows-x64-portable.zip
+          $hash = (Get-FileHash -Path dist-win\LBP1120-Windows-x64-portable.zip -Algorithm SHA256).Hash
+          "$hash  LBP1120-Windows-x64-portable.zip" | Out-File -FilePath dist-win\SHA256SUMS.txt -Encoding utf8
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist-win/LBP1120-Windows-x64-portable.zip
+            dist-win/SHA256SUMS.txt
+            README.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
